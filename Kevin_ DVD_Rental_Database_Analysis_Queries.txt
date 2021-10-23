@@ -1,0 +1,80 @@
+/*Query 1 - How many movies are available in each language?*/
+
+SELECT
+  l.name language_name,
+  COUNT(f.language_id) number_of_movies
+FROM language l
+LEFT JOIN film f
+  ON l.language_id = f.language_id
+GROUP BY language_name;
+
+
+/*Query 2: Which staff manager has processed the most payments?*/
+
+SELECT
+  CONCAT(s.first_name, ' ', s.last_name) staff_full_name,
+  (COUNT(p.customer_id)) processed_payments
+FROM staff s
+JOIN payment p
+  ON s.staff_id = p.staff_id
+GROUP BY staff_full_name
+ORDER BY processed_payments DESC;
+
+
+/*Query 3: What are the top ten cities with the highest average movie runtimes?*/
+
+SELECT
+  city_name,
+  ROUND(AVG(filmlen), 2) average_runtime
+FROM (SELECT
+  c.city city_name,
+  f.length filmlen
+FROM city c
+JOIN address a
+  ON c.city_id = a.city_id
+JOIN customer cu
+  ON a.address_id = cu.address_id
+JOIN rental r
+  ON cu.customer_id = r.customer_id
+JOIN inventory i
+  ON r.inventory_id = i.inventory_id
+JOIN film f
+  ON i.film_id = f.film_id) t1
+GROUP BY city_name
+ORDER BY average_runtime DESC
+LIMIT 10;
+
+
+/*Query 4: Which countries are in the 4th quartile range for number of orders and payments?*/
+
+WITH country_orders
+AS (SELECT
+  co.country country_name,
+  1 + (RANK() OVER (ORDER BY COUNT(p.rental_id)) - 1) * 4 / COUNT(1) OVER (PARTITION BY (SELECT
+    1)
+  ) AS quartile_order,
+  COUNT(p.rental_id) total_orders,
+  1 + (RANK() OVER (ORDER BY SUM(amount)) - 1) * 4 / COUNT(1) OVER (PARTITION BY (SELECT
+    1)
+  ) AS quartile_sales,
+  SUM(amount) total_sales
+FROM country co
+JOIN city ci
+  ON co.country_id = ci.country_id
+JOIN address a
+  ON ci.city_id = a.city_id
+JOIN customer cu
+  ON a.address_id = cu.address_id
+JOIN rental r
+  ON cu.customer_id = r.customer_id
+JOIN payment p
+  ON r.rental_id = p.rental_id
+GROUP BY country_name)
+
+SELECT
+  country_name,
+  total_orders,
+  ROUND(total_sales, 0) total_sales
+FROM country_orders c_o
+WHERE quartile_sales = 4
+AND quartile_order = 4;
